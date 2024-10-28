@@ -17,6 +17,7 @@ const ParentProfile = () => {
     primary_no: "",
     primary_email: "",
   });
+  const [studUserId,setStudUserID] = useState("")
 
   const getParentData = async () => {
     try {
@@ -26,6 +27,7 @@ const ParentProfile = () => {
         },
       });
       setParentData(response?.data);
+      setStudUserID(response?.data?.s_user_id)
     } catch (error) {
       // console.error("Error getting Profile", error);
     }
@@ -55,13 +57,18 @@ const ParentProfile = () => {
         text: "Form updated Success Fully",
         icon: "success",
         confirmButtonColor: "#7066E0",
+        customClass: {
+          icon: "swal-my-icon",
+        },
         confirmButtonText: "OK",
       });
     } catch (error) {
-      // console.error("error", error);
       Swal.fire({
         text: "Form not updated due to some issue",
         icon: "error",
+        customClass: {
+          icon: "swal-my-icon",
+        },
         confirmButtonColor: "#7066E0",
         confirmButtonText: "OK",
       });

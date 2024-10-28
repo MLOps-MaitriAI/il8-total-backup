@@ -40,7 +40,9 @@ const Enrolled = () => {
         setData([]);
         Swal.fire({
           icon: "info",
-          title: "Error",
+          customClass: {
+            icon: "swal-my-icon",
+          },
           text: "No Student Found",
         });
         setLoading(false);
@@ -53,10 +55,13 @@ const Enrolled = () => {
         setLoading(false);
       }
     } catch (error) {
-      // console.error("Error fetching Enrolled Data", error);
+      console.error("Error fetching Enrolled Data", error);
       Swal.fire({
         icon: "error",
         title: "Error",
+        customClass: {
+          icon: "swal-my-icon",
+        },
         text: error?.response?.data?.detail,
         showConfirmButton: true,
         confirmButtonColor: "red",

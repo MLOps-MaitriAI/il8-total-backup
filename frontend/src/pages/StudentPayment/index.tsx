@@ -33,7 +33,10 @@ const StudentPayment = () => {
       // console.error(error, "Error fetching Users Data");
       Swal.fire({
         icon: "error",
-        title: "Error",
+        title: "No payment data was there",
+        customClass: {
+          icon: "swal-my-icon",
+        },
         text: error?.response?.data?.detail,
         showConfirmButton: true,
         confirmButtonColor: "red",

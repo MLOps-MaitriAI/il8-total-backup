@@ -35,6 +35,9 @@ export default function ContactUsPage() {
           icon: "success",
           confirmButtonColor: "#7066E0",
           confirmButtonText: "Yes",
+          customClass: {
+            icon: "swal-my-icon",
+          },
         }).then((result: { isConfirmed: any }) => {
           if (result.isConfirmed) {
             window.location.reload();
@@ -50,6 +53,9 @@ export default function ContactUsPage() {
           icon: "error",
           showConfirmButton: true,
           confirmButtonColor: "red",
+          customClass: {
+            icon: "swal-my-icon",
+          },
         }).then((result: { isConfirmed: any }) => {
           if (result.isConfirmed) {
             window.location.reload();
@@ -72,7 +78,7 @@ export default function ContactUsPage() {
               <div className="h-[455px] sm:h-[200px] w-full relative">
                 <Img
                 loading="lazy"
-                  src="images/img_image_56.png"
+                  src="images/img_image_56.webp"
                   alt="imagefiftysix"
                   className="justify-center h-[500px] sm:h-[200px] w-full xs:w-100 left-0 bottom-0 right-0 top-0 m-auto object-cover absolute"
                 />
@@ -219,15 +225,15 @@ export default function ContactUsPage() {
                       alt="vector_three"
                       className="h-[26px]"
                     />
-                    <Link to="#">
+                    <a href="tel:+919702279804" className="no-underline">
                       <Text
                         size="xl"
                         as="p"
                         className="!text-black-900 font-extrabold hover:underline sm:text-base lg:text-[16px]"
                       >
-                        09702279804
+                        +91 9702279804
                       </Text>
-                    </Link>
+                    </a>
                   </div>
                   <div className="flex flex-row justify-start w-2/5 mt-[29px]">
                     <div className="flex flex-col items-start justify-start w-full gap-4">
@@ -238,15 +244,15 @@ export default function ContactUsPage() {
                           alt="vector_five"
                           className="h-6"
                         />
-                        <Link to="#">
+                        <a href="mailto:ilatelearning@gmail.com">
                           <Text
                             size="xl"
                             as="p"
                             className="!text-black-900 font-extrabold hover:underline sm:text-base lg:text-[16px]"
                           >
-                            info@example.com
+                            ilatelearning@gmail.com
                           </Text>
-                        </Link>
+                        </a>
                       </div>
                       <div className="h-px w-full bg-black-900" />
                     </div>
@@ -284,7 +290,6 @@ export default function ContactUsPage() {
               </div>
             </div>
           </div>
-          {/* <Footer className="flex justify-center items-center w-full p-[42px] bg-black-900" /> */}
         </div>
       </div>
     </>

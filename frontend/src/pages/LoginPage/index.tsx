@@ -100,6 +100,9 @@ export default function LoginPage() {
         icon: "error",
         title: "Error While Changing Password ",
         text: forgetError,
+        customClass: {
+          icon: "swal-my-icon",
+        },
         showConfirmButton: true,
         confirmButtonColor: "red",
         // timer: 5000,
@@ -401,19 +404,14 @@ export default function LoginPage() {
             </Text>
             {forgetError && <p className="text-[red] mt-4">{forgetError}</p>}
           </div>
-          <div className="flex flex-col items-end justify-start sm:items-center mt-[21px] sm:mt-0 gap-[81px]">
-            {/* <Button
-              color="teal_900"
-              size="sm"
-              className="mr-[29px] !text-gray-100 font-inter font-bold min-w-[167px] rounded-[5px]"
-            >
-              Sign Up
-            </Button> */}
-            <Img
+          <div className="flex flex-col items-end justify-start sm:items-center mt-[21px] sm:mt-0 gap-[81px] w-[90%] md:w-auto">
+            <img
               loading="lazy"
-              src="images/img_reshot_illustra.png"
+              src="images/img_reshot_illustra.webp"
               alt="reshotillustra"
               className="w-[80%] p-1 sm:w-[90%] md:w-[100%] sm:mt-2 xs:w-[100%] sm:mb-8 md:p-8"
+              width="800"  // Explicit width
+              height="600" // Explicit height
             />
           </div>
         </div>

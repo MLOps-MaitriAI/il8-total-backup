@@ -90,6 +90,9 @@ const Payments = () => {
         title: "Error",
         text: error?.response?.data?.detail,
         showConfirmButton: true,
+        customClass: {
+          icon: "swal-my-icon",
+        },
         confirmButtonColor: "red",
       });
     }
@@ -147,6 +150,9 @@ const Payments = () => {
         Swal.fire({
           title: "Please Enter Payment Details",
           icon: "error",
+          customClass: {
+            icon: "swal-my-icon",
+          },
           showConfirmButton: true,
           confirmButtonColor: "red",
         });
@@ -181,6 +187,9 @@ const Payments = () => {
         // title: "Payment Successful",
         text: "Thank you for Enrolling to ILATE, Kindly Wait for the Response from Admission Office",
         confirmButtonColor: "#7066E0",
+        customClass: {
+          icon: "swal-my-icon",
+        },
         confirmButtonText: "Yes",
       }).then((result: { isConfirmed: any }) => {
         if (result.isConfirmed) {
@@ -195,41 +204,15 @@ const Payments = () => {
       Swal.fire({
         icon: "error",
         title: "Error",
+        customClass: {
+          icon: "swal-my-icon",
+        },
         text: error?.response?.data?.detail,
         showConfirmButton: true,
         confirmButtonColor: "red"
       });
     }
   };
-  // const handleSubmit = (e: React.FormEvent) => {
-  //   e.preventDefault();
-  //   if (paymentMode === "online") {
-  //     if (batchSize === 0) {
-  //       Swal.fire({
-  //         title: "Please Select Batch Size",
-  //         icon: "error",
-  //       });
-  //       return;
-  //     }
-  //     if (paymentInfo === "") {
-  //       Swal.fire({
-  //         title: "Please Enter Payment Details",
-  //         icon: "error",
-  //       });
-  //       return;
-  //     }
-  //   }
-  //   if (paymentMode === "offline") {
-  //     if (batchSize === 0) {
-  //       Swal.fire({
-  //         title: "Please Select Batch Size",
-  //         icon: "error",
-  //       });
-  //       return;
-  //     }
-  //     setPaymentInfo((prev) => (prev = ""));
-  //   }
-  // };
 
   const handleFees = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -239,6 +222,9 @@ const Payments = () => {
       Swal.fire({
         icon: "error",
         title: "Error",
+        customClass: {
+          icon: "swal-my-icon",
+        },
         text: "Please Select Batch Size and Years",
         showConfirmButton: true,
         confirmButtonColor: "red",
@@ -360,21 +346,6 @@ const Payments = () => {
                   <option value="1">1 Year</option>
                   <option value="2">2 Years</option>
                 </select>
-                {/* <Input
-                size="xs"
-                type="text"
-                name="years"
-                id="years"
-                value={years}
-                onChange={(value: number) => {
-                  setYears(value);
-                  setPaymentMode("");
-                  setPaymentInfo("");
-                }}
-                className="w-full max-w-6xl bg-teal-900 border border-teal-90 !text-white-A700 text-sm rounded-md focus:ring-white-A700 focus:border-white-A700 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
-                placeholder="Enter Number of Years Admission Taking For"
-                required
-              /> */}
               </div>
               <Button
                 variant="ilate"
@@ -385,7 +356,6 @@ const Payments = () => {
                 Save
               </Button>
             </form>
-            {/* {batchSize !== 0 && years !== 0 && years !== null && years > 0 && ( */}
             {amount !== 0 && feesAmoutCh && batchSize !== 0 && years !== 0 && (
               <>
                 <h2 className="text-xl font-bold my-2">
@@ -593,19 +563,6 @@ const Payments = () => {
                 </>
               )
             )}
-            {/* : (
-              paymentMode === "" &&
-              batchSize !== 0 &&
-              years > 0 &&
-              years && (
-                <>
-                  <p>
-                    Kindly Select Payment Method
-                    <span className="text-red-500">*</span>
-                  </p>
-                </>
-              )
-            )} */}
           </div>
           <div className="py-8 px-10 lg:py-16 mt-10 md:col-span-1">
             <p className="mb-5 font-bold text-lg">Payment Terms & Conditions</p>

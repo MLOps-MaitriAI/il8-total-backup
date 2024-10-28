@@ -21,6 +21,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
 from typing import List
+from sqlalchemy import cast, Date
 
 router = APIRouter()
 
@@ -53,11 +54,12 @@ def create_attendance(
         existing_attendance = db.query(Attendance).filter(
             Attendance.student_id == student_id,
             Attendance.course_content_id == course_content_id,
-            func.date(Attendance.date) == func.date(ist_now)  
+            cast(Attendance.date, Date) == ist_now.date()
         ).first()
         
         if existing_attendance:
-            existing_attendance.status = [student_status_list[i]]
+            existing_attendance.status = [student_status_list[i]],
+            existing_attendance.date = ist_now
         else:
             db_attendance = Attendance(
                 student_id=student_id,
@@ -200,8 +202,8 @@ def update_attendance(student_id: int, status: AttendanceStatus, db: Session = D
     return attendance
 
 @router.delete("/attendance/")
-def attendance_delete(student_id:int, db:Session=Depends(get_db)):
-    Attendance_db=db.query(Attendance).filter(Attendance.student_id== student_id).first()
+def attendance_delete(attendance_id:int, db:Session=Depends(get_db)):
+    Attendance_db=db.query(Attendance).filter(Attendance.id== attendance_id).first()
     if not Attendance_db:
         raise HTTPException(status_code=404, detail="Attendance record not found")
     db.delete(Attendance_db)

@@ -13,21 +13,23 @@ from typing import List, Dict
 from ..models.user import LmsUsers
 from sqlalchemy import and_
 from pydantic import BaseModel
+from sqlalchemy import select
 
 router = APIRouter()
 
 class AssignCoursesRequest(BaseModel):
     teacher_id: int
     course_id: int
-    course_content_id: List[int]  
+    course_content_id: int  
 
     class Config:
-        from_attributes = True 
-    
+        from_attributes = True
 
 @router.post("/teachers/assign_courses")
-def assign_courses_to_teacher(request: AssignCoursesRequest,db: Session = Depends(get_db)):
-    
+def assign_courses_to_teacher(
+    request: AssignCoursesRequest,
+    db: Session = Depends(get_db)
+):
     teacher = db.query(Teacher).filter(Teacher.Teacher_id == request.teacher_id).first()
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher not found")
@@ -36,40 +38,67 @@ def assign_courses_to_teacher(request: AssignCoursesRequest,db: Session = Depend
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    # Check if all course contents exist
-    course_contents = db.query(Course_content).filter(Course_content.id.in_(request.course_content_id)).all()
-    if len(course_contents) != len(request.course_content_id):
-        raise HTTPException(status_code=404, detail="One or more course contents not found")
+    course_content = (
+        db.query(Course_content)
+        .filter(Course_content.id == request.course_content_id)
+        .first()
+    )
+    if not course_content:
+        raise HTTPException(
+            status_code=404, 
+            detail="Course content not found"
+        )
 
-    assigned_courses = []
+    existing_assignment = (
+        db.query(TeacherCourse)
+        .filter(
+            TeacherCourse.teacher_id == request.teacher_id,
+            TeacherCourse.course_id == request.course_id,
+            TeacherCourse.course_content_id == request.course_content_id
+        )
+        .first()
+    )
+
+    if existing_assignment:
+        raise HTTPException(
+            status_code=400, 
+            detail="This course is already assigned to this teacher"
+        )
+
     try:
-        for course_content in course_contents:
-            teacher_course = TeacherCourse(
-                teacher_id=teacher.Teacher_id,
-                course_id=request.course_id,
-                course_content_id=course_content.id,
-                user_id=teacher.user_id,  
-                is_assign_course=True
-            )
-            db.add(teacher_course)
-            assigned_courses.append({
-                "course_id": request.course_id,
-                "course_name":course_content.course.name,
-                "course_content_id": course_content.id,
-                "course_content_standard_name": course_content.standard.name,
-                "course_content_subject_name": course_content.subject.name,
-                "course_content_module_name": course_content.module.name,
-            })
+        teacher_course = TeacherCourse(
+            teacher_id=teacher.Teacher_id,
+            course_id=request.course_id,
+            course_content_id=course_content.id,
+            user_id=teacher.user_id,
+            is_assign_course=True
+        )
+        
+        db.add(teacher_course)
+
+        assigned_course = {
+            "course_id": request.course_id,
+            "course_name": course_content.course.name,
+            "course_content_id": course_content.id,
+            "course_content_standard_name": course_content.standard.name,
+            "course_content_subject_name": course_content.subject.name,
+            "course_content_module_name": course_content.module.name,
+        }
+
         db.commit()
-    except:
+
+    except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to assign courses to teacher:")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to assign course to teacher: {str(e)}"
+        )
 
     return {
-        "message": "Courses assigned successfully",
+        "message": "Course assigned successfully",
         "teacher_id": teacher.Teacher_id,
         "teacher_name": teacher.name,
-        "assigned_courses": assigned_courses
+        "assigned_course": assigned_course
     }
 
 class CourseResponse(BaseModel):
@@ -103,3 +132,60 @@ def get_assigned_courses(
 
     
     return [CourseResponse.from_orm(course) for course in assigned_courses]
+
+class TeacherCourseResponse(BaseModel):
+    id: int
+    teacher_id: int
+    teacher_name: str  # New field for teacher name
+    course_id: int
+    course_content_id: int
+    user_id: int
+    is_assign_course: bool
+    course_name: str
+    subject_name: str
+    standard_name: str
+    module_name: str
+
+    class Config:
+        orm_mode = True
+
+@router.get("/teacher_assigned_courses/", response_model=List[TeacherCourseResponse],dependencies=[Depends(JWTBearer()), Depends(get_admin)])
+def get_all_teacher_courses(db: Session = Depends(get_db)):
+    # Query to get all teacher courses with related information
+    teacher_courses_query = (
+        select(TeacherCourse)
+        .options(
+            joinedload(TeacherCourse.course_Assign)  # Load Course_content
+            .joinedload(Course_content.course),      # Load Course
+            joinedload(TeacherCourse.course_Assign)  # Load Course_content again for subject
+            .joinedload(Course_content.subject),     # Load Subject
+            joinedload(TeacherCourse.course_Assign)  # Load Course_content again for standard
+            .joinedload(Course_content.standard),    # Load Standard
+            joinedload(TeacherCourse.course_Assign)  # Load Course_content again for module
+            .joinedload(Course_content.module),       # Load Module
+            joinedload(TeacherCourse.teacher_Assign)  # Load Teacher
+        )
+    )
+
+    teacher_courses = db.execute(teacher_courses_query).scalars().all()
+
+    if not teacher_courses:
+        raise HTTPException(status_code=404, detail="No teacher courses found.")
+
+    # Prepare the response
+    return [
+        TeacherCourseResponse(
+            id=course.id,
+            teacher_id=course.teacher_id,
+            teacher_name=course.teacher_Assign.name if course.teacher_Assign else None,  # Get teacher name
+            course_id=course.course_id,
+            course_content_id=course.course_content_id,
+            user_id=course.user_id,
+            is_assign_course=course.is_assign_course,
+            course_name=course.course_Assign.course.name if course.course_Assign and course.course_Assign.course else None,
+            subject_name=course.course_Assign.subject.name if course.course_Assign and course.course_Assign.subject else None,
+            standard_name=course.course_Assign.standard.name if course.course_Assign and course.course_Assign.standard else None,
+            module_name=course.course_Assign.module.name if course.course_Assign and course.course_Assign.module else None
+        )
+        for course in teacher_courses
+    ]

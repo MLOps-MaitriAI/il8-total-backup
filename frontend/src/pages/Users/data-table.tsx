@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/select";
 import axios from "helper/axios";
 import Swal from "sweetalert2";
+import { useBranch } from "hooks/Branch";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -83,6 +84,7 @@ export function DataTable<TData, TValue>({
     user_name: "",
     user_email: "",
     phone_no: "",
+    branch_id: "",
     user_type: "",
     user_password: "",
     repassword: "",
@@ -113,6 +115,7 @@ export function DataTable<TData, TValue>({
       rowSelection,
     },
   });
+  const { branchData } = useBranch();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -129,6 +132,9 @@ export function DataTable<TData, TValue>({
           icon: "success",
           title: `User Created Successfully`,
           showConfirmButton: false,
+          customClass: {
+            icon: "swal-my-icon",
+          },
           timer: 1500,
         }).then(() => window.location.reload());
       } catch (error) {
@@ -140,6 +146,9 @@ export function DataTable<TData, TValue>({
             error?.message ||
             "Please check your internet connection or try again later.",
           showConfirmButton: false,
+          customClass: {
+            icon: "swal-my-icon",
+          },
           timer: 1500,
         });
       }
@@ -147,6 +156,9 @@ export function DataTable<TData, TValue>({
       Swal.fire({
         icon: "error",
         title: "Passwords do not match!",
+        customClass: {
+          icon: "swal-my-icon",
+        },
         showConfirmButton: false,
         timer: 1500,
       });
@@ -247,6 +259,40 @@ export function DataTable<TData, TValue>({
                       handleInputChange("phone_no", e.target.value)
                     }
                   />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="phone_no" className="text-right">
+        Branch
+      </Label>
+      <select
+        name="branch_id"
+        value={formData.branch_id}
+        onChange={(e) => handleInputChange("branch_id", e.target.value)}
+        className="col-span-3 bg-gray-500 text-white-A700 h-[40px] rounded-[5px] text-[14px] pl-[10px]
+          appearance-none
+          bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E')]
+          bg-[length:0.65em]
+          bg-[right_0.75em_center]
+          bg-no-repeat
+          pr-[2.5em]
+          [&>option]:bg-gray-500 
+          [&>option]:text-white-A700
+          [&>option:checked]:bg-gray-600"
+        required
+      >
+        <option value="" disabled hidden>
+          Select Branch..
+        </option>
+        {branchData.map((branch, index) => (
+          <option
+            key={index}
+            value={branch.id}
+            className="bg-gray-500 text-white-A700"
+          >
+            {branch.name}
+          </option>
+        ))}
+      </select>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="phone_no" className="text-right">

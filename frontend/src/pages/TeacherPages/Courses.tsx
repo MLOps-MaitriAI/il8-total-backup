@@ -29,7 +29,6 @@ const MyCourses = () => {
           Authorization: `Bearer ${user.token}`,
         },
       });
-      // console.log(response.data)
       setCourseData(response?.data);
     } catch (error) {
       // console.error(error);
@@ -88,6 +87,9 @@ const MyCourses = () => {
           title: "No Content",
           text: "There is no content available for this course detail.",
           icon: "info",
+          customClass: {
+            icon: "swal-my-icon",
+          },
           confirmButtonText: "OK",
           confirmButtonColor: "#7066E0",
         });
@@ -98,6 +100,9 @@ const MyCourses = () => {
         title: "No Content Available For This Course.",
         text: "Please add content.",
         icon: "info",
+        customClass: {
+          icon: "swal-my-icon",
+        },
         confirmButtonText: "OK",
         confirmButtonColor: "#7066E0",
       });
@@ -132,7 +137,7 @@ const MyCourses = () => {
         </div>
       ) : (
         <div className="p-6 mt-20 ">
-          <h1 className=" text-[24px] text-[#002D51] font-semibold">
+          <h1 className="px-11 text-[24px] text-[#002D51] font-semibold">
             Courses was not assigned to you.
           </h1>
         </div>

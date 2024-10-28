@@ -6,6 +6,7 @@ import {
   LibraryBig,
   UserRound,
   Mic2Icon,
+  CheckSquare,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuthContext } from "hooks/useAuthContext";
@@ -50,6 +51,13 @@ const UserSidebarLayout = () => {
                 icon={<CalendarCheck2 size={20} />}
                 text="Attendance"
                 active={location.pathname === "/dashboard/myattendance"}
+              />
+            </Link>
+            <Link to={"/dashboard/assessment"}>
+              <SidebarItem
+                icon={<CheckSquare size={20} />}
+                text="Assessment"
+                active={location.pathname === "/dashboard/assessment"}
               />
             </Link>
             <Link to={"/dashboard/myannouncement"}>
