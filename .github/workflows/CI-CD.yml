@@ -1,0 +1,85 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - staging
+      - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_BACKEND: ghcr.io/<your-username>/<your-repo>-backend
+  IMAGE_NAME_FRONTEND: ghcr.io/<your-username>/<your-repo>-frontend
+  MYSQL_IMAGE: mysql:8.0  # Assuming MySQL container image is not custom
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Checkout the code
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # Set up Node.js for TypeScript frontend
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+
+    # Install dependencies and run tests for frontend
+    - name: Install and Test Frontend
+      working-directory: ./frontend
+      run: |
+        npm install
+        npm run test
+
+    # Set up Python for FastAPI backend
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.10
+
+    # Install dependencies and run tests for backend
+    - name: Install and Test Backend
+      working-directory: ./backend
+      run: |
+        pip install -r requirements.txt
+        pytest
+
+    # Log in to GitHub Container Registry
+    - name: Log in to GitHub Container Registry
+      run: echo "${{ secrets.GHCR_PAT }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+    # Build and push backend image
+    - name: Build and Push Backend Image
+      working-directory: ./backend
+      run: |
+        docker build -t ${{ env.IMAGE_NAME_BACKEND }}:latest .
+        docker push ${{ env.IMAGE_NAME_BACKEND }}:latest
+
+    # Build and push frontend image
+    - name: Build and Push Frontend Image
+      working-directory: ./frontend
+      run: |
+        docker build -t ${{ env.IMAGE_NAME_FRONTEND }}:latest .
+        docker push ${{ env.IMAGE_NAME_FRONTEND }}:latest
+
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/production'
+    runs-on: ubuntu-latest
+
+    steps:
+    # Deploy containers on the server
+    - name: Deploy to Server
+      uses: appleboy/ssh-action@v0.1.9
+      with:
+        host: ${{ secrets.SERVER_IP }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          cd /path/to/deployment
+          docker-compose pull  # Pull the latest images from GHCR
+          docker-compose up -d --remove-orphans  # Start or update containers
+          docker system prune -f  # Remove unused images and containers
