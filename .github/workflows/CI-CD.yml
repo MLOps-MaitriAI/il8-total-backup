@@ -17,53 +17,53 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Checkout the code
-    - name: Checkout code
-      uses: actions/checkout@v3
+      # Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    # Set up Node.js for TypeScript frontend
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: 18
+      # Set up Node.js for TypeScript frontend
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
 
-    # Install dependencies and run tests for frontend
-    - name: Install and Test Frontend
-      working-directory: ./frontend
-      run: |
-        npm install
-        npm run test
+      # Install dependencies and run tests for frontend
+      - name: Install and Test Frontend
+        working-directory: ./frontend
+        run: |
+          npm install
+          npm run test
 
-    # Set up Python for FastAPI backend
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: 3.10
+      # Set up Python for FastAPI backend
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
 
-    # Install dependencies and run tests for backend
-    - name: Install and Test Backend
-      working-directory: ./backend
-      run: |
-        pip install -r requirements.txt
-        pytest
+      # Install dependencies and run tests for backend
+      - name: Install and Test Backend
+        working-directory: ./backend
+        run: |
+          pip install -r requirements.txt
+          pytest
 
-    # Log in to GitHub Container Registry
-    - name: Log in to GitHub Container Registry
-      run: echo "${{ secrets.GHCR_PAT }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+      # Log in to GitHub Container Registry
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
 
-    # Build and push backend image
-    - name: Build and Push Backend Image
-      working-directory: ./backend
-      run: |
-        docker build -t ${{ env.IMAGE_NAME_BACKEND }}:latest .
-        docker push ${{ env.IMAGE_NAME_BACKEND }}:latest
+      # Build and push backend image
+      - name: Build and Push Backend Image
+        working-directory: ./backend
+        run: |
+          docker build -t ${{ env.IMAGE_NAME_BACKEND }}:latest .
+          docker push ${{ env.IMAGE_NAME_BACKEND }}:latest
 
-    # Build and push frontend image
-    - name: Build and Push Frontend Image
-      working-directory: ./frontend
-      run: |
-        docker build -t ${{ env.IMAGE_NAME_FRONTEND }}:latest .
-        docker push ${{ env.IMAGE_NAME_FRONTEND }}:latest
+      # Build and push frontend image
+      - name: Build and Push Frontend Image
+        working-directory: ./frontend
+        run: |
+          docker build -t ${{ env.IMAGE_NAME_FRONTEND }}:latest .
+          docker push ${{ env.IMAGE_NAME_FRONTEND }}:latest
 
   deploy:
     needs: build-and-test
@@ -71,15 +71,43 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Deploy containers on the server
-    - name: Deploy to Server
-      uses: appleboy/ssh-action@v0.1.9
-      with:
-        host: ${{ secrets.SERVER_IP }}
-        username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SERVER_SSH_KEY }}
-        script: |
-          cd /path/to/deployment
-          docker-compose pull  # Pull the latest images from GHCR
-          docker-compose up -d --remove-orphans  # Start or update containers
-          docker system prune -f  # Remove unused images and containers
+      # Deploy containers on the server
+      - name: Deploy to Akamai server
+        env:
+          SERVER_IP: ${{ secrets.AKAMAI_SERVER_IP }}
+          SERVER_USER: ${{ secrets.AKAMAI_SERVER_USER }}
+          SERVER_PASSWORD: ${{ secrets.AKAMAI_SERVER_PASSWORD }}
+          WEBSITE_FOLDER: ${{ secrets.WEBSITE_FOLDER }}
+        run: |
+          mkdir -p temp_staging
+
+          # Copy only the changed files to the temporary directory
+          git diff --name-only HEAD~1 HEAD | while read -r file; do
+            if [ -f "$file" ]; then
+              echo "Processing: $file"
+              mkdir -p "temp_staging/$(dirname "$file")"
+              cp "$file" "temp_staging/$file"
+            fi
+          done
+
+          sshpass -p "$SERVER_PASSWORD" rsync -avz --exclude='.git' --exclude='.github' -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" temp_staging/ "$SERVER_USER@$SERVER_IP:$WEBSITE_FOLDER"
+
+          rm -rf temp_staging
+
+          echo "Deployment completed successfully!"
+
+      - name: Verify Deployment
+        env:
+          SERVER_IP: ${{ secrets.AKAMAI_SERVER_IP }}
+          SERVER_USER: ${{ secrets.AKAMAI_SERVER_USER }}
+          SERVER_PASSWORD: ${{ secrets.AKAMAI_SERVER_PASSWORD }}
+          WEBSITE_FOLDER: ${{ secrets.WEBSITE_FOLDER }}
+        run: |
+          echo "Recently changed files:"
+          git diff --name-only HEAD~1 HEAD
+          
+          echo "Verifying files on server:"
+          sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SERVER_USER@$SERVER_IP" "ls -la $WEBSITE_FOLDER"
+
+      - name: Deployment Status
+        run: echo "Deployment completed. Please check the Verify Deployment step output to confirm the updated files."
