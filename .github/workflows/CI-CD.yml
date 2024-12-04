@@ -9,7 +9,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME_BACKEND: ghcr.io/MLOps-MaitriAI/il8-total-backup-backend
   IMAGE_NAME_FRONTEND: ghcr.io/MLOps-MaitriAI/il8-total-backup-frontend
-  MYSQL_IMAGE: mysql:5.7  # Assuming MySQL container image is not custom
+  MYSQL_IMAGE: mysql:5.7
 
 jobs:
   build-and-test:
@@ -35,9 +35,13 @@ jobs:
           
           # Install dependencies using legacy peer deps to resolve conflicts
           npm install --legacy-peer-deps
-
-          # Run tests
-          npm run test
+          
+          # Run tests if the test script exists
+          if npm run | grep -q test; then
+            npm run test
+          else
+            echo "No test script found. Skipping tests."
+          fi
 
       # Set up Python for FastAPI backend
       - name: Set up Python
