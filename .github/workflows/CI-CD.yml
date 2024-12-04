@@ -30,7 +30,13 @@ jobs:
       - name: Install and Test Frontend
         working-directory: ./frontend
         run: |
-          npm install
+          # Set engine-strict to false to bypass engine version checks
+          npm config set engine-strict false
+          
+          # Install dependencies using legacy peer deps to resolve conflicts
+          npm install --legacy-peer-deps
+
+          # Run tests
           npm run test
 
       # Set up Python for FastAPI backend
