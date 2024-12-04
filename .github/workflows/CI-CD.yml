@@ -10,7 +10,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME_BACKEND: ghcr.io/<MLOps-MaitriAI>/<il8-total-backup>-backend
   IMAGE_NAME_FRONTEND: ghcr.io/<MLOps-MaitriAI>/<il8-total-backup>-frontend
-  MYSQL_IMAGE: mysql:8.0  # Assuming MySQL container image is not custom
+  MYSQL_IMAGE: mysql:5.7  # Assuming MySQL container image is not custom
 
 jobs:
   build-and-test:
