@@ -55,6 +55,7 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install pytest
+          pytest -W ignore::Warning  # Ignore warnings during test runs
           pytest
 
       # Log in to GitHub Container Registry
