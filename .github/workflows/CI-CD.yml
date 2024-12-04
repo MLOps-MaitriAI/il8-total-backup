@@ -54,6 +54,7 @@ jobs:
         working-directory: ./backend/app/
         run: |
           pip install -r requirements.txt
+          pip install pytest
           pytest
 
       # Log in to GitHub Container Registry
