@@ -13,7 +13,7 @@ env:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       # Checkout the code
@@ -74,7 +74,7 @@ jobs:
   deploy:
     needs: build-and-test
     if: github.ref == 'refs/heads/production'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       # Deploy containers on the Ubuntu server
