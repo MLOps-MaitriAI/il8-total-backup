@@ -30,20 +30,15 @@ jobs:
       - name: Install and Test Frontend
         working-directory: ./frontend
         run: |
-          # Set engine-strict to false to bypass engine version checks
           npm config set engine-strict false
-          
-          # Install dependencies using legacy peer deps to resolve conflicts
           npm install --legacy-peer-deps
-
-          # Run tests
           npm run test || echo "Frontend tests failed but continuing"
 
       # Set up Python for FastAPI backend
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.12'  # Ensure this matches your backend's Python version
+          python-version: '3.12'
 
       # Install dependencies for backend
       - name: Install dependencies
@@ -82,16 +77,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Deploy containers on the server
-      - name: Deploy to Akamai server
+      # Deploy containers on the Ubuntu server
+      - name: Deploy to Ubuntu Server
         env:
-          SERVER_IP: ${{ secrets.AKAMAI_SERVER_IP }}
-          SERVER_USER: ${{ secrets.AKAMAI_SERVER_USER }}
-          SERVER_PASSWORD: ${{ secrets.AKAMAI_SERVER_PASSWORD }}
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          PEM_FILE: ${{ secrets.PEM_FILE }}
           WEBSITE_FOLDER: ${{ secrets.WEBSITE_FOLDER }}
         run: |
           mkdir -p temp_staging
-
           # Copy only the changed files to the temporary directory
           git diff --name-only HEAD~1 HEAD | while read -r file; do
             if [ -f "$file" ]; then
@@ -100,25 +94,22 @@ jobs:
               cp "$file" "temp_staging/$file"
             fi
           done
-
-          sshpass -p "$SERVER_PASSWORD" rsync -avz --exclude='.git' --exclude='.github' -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" temp_staging/ "$SERVER_USER@$SERVER_IP:$WEBSITE_FOLDER"
-
+          rsync -avz --exclude='.git' --exclude='.github' -e "ssh -i $PEM_FILE -o StrictHostKeyChecking=no" temp_staging/ "$SERVER_USER@$SERVER_IP:$WEBSITE_FOLDER"
           rm -rf temp_staging
-
           echo "Deployment completed successfully!"
 
       - name: Verify Deployment
         env:
-          SERVER_IP: ${{ secrets.AKAMAI_SERVER_IP }}
-          SERVER_USER: ${{ secrets.AKAMAI_SERVER_USER }}
-          SERVER_PASSWORD: ${{ secrets.AKAMAI_SERVER_PASSWORD }}
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          PEM_FILE: ${{ secrets.PEM_FILE }}
           WEBSITE_FOLDER: ${{ secrets.WEBSITE_FOLDER }}
         run: |
           echo "Recently changed files:"
           git diff --name-only HEAD~1 HEAD
           
           echo "Verifying files on server:"
-          sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SERVER_USER@$SERVER_IP" "ls -la $WEBSITE_FOLDER"
+          ssh -i $PEM_FILE -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "ls -la $WEBSITE_FOLDER"
 
       - name: Deployment Status
         run: echo "Deployment completed. Please check the Verify Deployment step output to confirm the updated files."
