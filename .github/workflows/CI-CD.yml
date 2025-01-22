@@ -13,47 +13,18 @@ jobs:
   build-and-test:
     runs-on: ubuntu-24.04
     steps:
-      # Checkout the code
       - name: Checkout code
         uses: actions/checkout@v3
-      # Set up Node.js for TypeScript frontend
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-      # Install dependencies and run tests for frontend
-      - name: Install and Test Frontend
-        working-directory: ./frontend
-        run: |
-          npm config set engine-strict false
-          npm install --legacy-peer-deps
-          npm run test || echo "Frontend tests failed but continuing"
-      # Set up Python for FastAPI backend
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.12'
-      # Install dependencies for backend
-      - name: Install dependencies
-        working-directory: ./backend
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt || echo "Backend dependencies installation failed but continuing"
-      # Run tests for backend
-      - name: Run tests
-        working-directory: ./backend
-        run: |
-          python -m pytest tests/ || echo "Backend tests failed but continuing"
-      # Log in to GitHub Container Registry
+        
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.IL8_CI_CD }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
-      # Build and push backend image
+        
       - name: Build and Push Backend Image
         working-directory: ./backend/app/
         run: |
           docker build -t ${{ env.IMAGE_NAME_BACKEND }}:latest .
           docker push ${{ env.IMAGE_NAME_BACKEND }}:latest
-      # Build and push frontend image
+          
       - name: Build and Push Frontend Image
         working-directory: ./frontend
         run: |
@@ -70,72 +41,60 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.PEM_FILE }}" > ~/.ssh/deploy_key.pem
           chmod 600 ~/.ssh/deploy_key.pem
+
+      - name: Install Docker and Docker Compose on Server
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "
+            # Check if Docker is installed
+            if ! command -v docker &> /dev/null; then
+              echo 'Installing Docker...'
+              sudo apt-get update
+              sudo apt-get install -y docker.io
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              sudo usermod -aG docker $USER
+            fi
+
+            # Check if Docker Compose is installed
+            if ! command -v docker-compose &> /dev/null; then
+              echo 'Installing Docker Compose...'
+              sudo apt-get install -y docker-compose
+            fi
+          "
           
       - name: Login to GitHub Container Registry on Server
         env:
           SERVER_IP: ${{ secrets.SERVER_IP }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
-          ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" \
-          "echo '${{ secrets.IL8_CI_CD }}' | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin"
+          ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "
+            # Create docker config directory if it doesn't exist
+            mkdir -p ~/.docker
+            
+            # Login to GitHub Container Registry
+            echo '${{ secrets.IL8_CI_CD }}' | sudo docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+          "
 
-      - name: Deploy Containers
+      - name: Pull and Run Containers
         env:
           SERVER_IP: ${{ secrets.SERVER_IP }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
-          # Create docker-compose file content
-          echo "Creating docker-compose configuration..."
-          COMPOSE_CONTENT='
-          version: "3.8"
-          services:
-            frontend:
-              image: ${{ env.IMAGE_NAME_FRONTEND }}:latest
-              ports:
-                - "80:80"
-              restart: always
-              depends_on:
-                - backend
-
-            backend:
-              image: ${{ env.IMAGE_NAME_BACKEND }}:latest
-              ports:
-                - "8000:8000"
-              restart: always
-              environment:
-                - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD}@db:3306/il8db
-              depends_on:
-                - db
-
-            db:
-              image: ${{ env.MYSQL_IMAGE }}
-              restart: always
-              environment:
-                - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-                - MYSQL_DATABASE=il8db
-              volumes:
-                - mysql_data:/var/lib/mysql
-
-          volumes:
-            mysql_data:
-          '
-          
-          # Deploy using SSH
           ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "
+            # Pull the latest images
+            sudo docker pull ${{ env.IMAGE_NAME_FRONTEND }}:latest
+            sudo docker pull ${{ env.IMAGE_NAME_BACKEND }}:latest
+            
             # Stop and remove existing containers
-            docker-compose down || true
+            sudo docker stop frontend backend || true
+            sudo docker rm frontend backend || true
             
-            # Create new docker-compose.yml
-            echo '$COMPOSE_CONTENT' > docker-compose.yml
-            
-            # Pull latest images
-            docker-compose pull
-            
-            # Start containers
-            MYSQL_ROOT_PASSWORD='${{ secrets.MYSQL_ROOT_PASSWORD }}' docker-compose up -d
-            
-            # Cleanup old images
-            docker image prune -f
+            # Run the containers
+            sudo docker run -d --name frontend -p 80:80 ${{ env.IMAGE_NAME_FRONTEND }}:latest
+            sudo docker run -d --name backend -p 8000:8000 ${{ env.IMAGE_NAME_BACKEND }}:latest
           "
 
       - name: Verify Deployment
@@ -145,11 +104,8 @@ jobs:
         run: |
           echo "Verifying container status..."
           ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "
-            docker ps --format '{{.Names}}\t{{.Status}}'
+            sudo docker ps --format '{{.Names}}\t{{.Status}}'
           "
 
       - name: Cleanup SSH key
         run: rm -f ~/.ssh/deploy_key.pem
-        
-      - name: Deployment Status
-        run: echo "Deployment completed. Please check the Verify Deployment step output to confirm the container status."
