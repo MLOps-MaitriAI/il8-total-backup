@@ -65,48 +65,91 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 2  # Fetch the last 2 commits to enable diff
-        
       - name: Create SSH key file
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.PEM_FILE }}" > ~/.ssh/deploy_key.pem
           chmod 600 ~/.ssh/deploy_key.pem
           
-      # Deploy containers on the Ubuntu server
-      - name: Deploy to Ubuntu Server
+      - name: Login to GitHub Container Registry on Server
         env:
           SERVER_IP: ${{ secrets.SERVER_IP }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
-          WEBSITE_FOLDER: ${{ secrets.WEBSITE_FOLDER }}
         run: |
-          # Create the website folder if it doesn't exist
-          ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "mkdir -p $WEBSITE_FOLDER"
+          ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" \
+          "echo '${{ secrets.IL8_CI_CD }}' | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin"
+
+      - name: Deploy Containers
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          # Create docker-compose file content
+          echo "Creating docker-compose configuration..."
+          COMPOSE_CONTENT='
+          version: "3.8"
+          services:
+            frontend:
+              image: ${{ env.IMAGE_NAME_FRONTEND }}:latest
+              ports:
+                - "80:80"
+              restart: always
+              depends_on:
+                - backend
+
+            backend:
+              image: ${{ env.IMAGE_NAME_BACKEND }}:latest
+              ports:
+                - "8000:8000"
+              restart: always
+              environment:
+                - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD}@db:3306/il8db
+              depends_on:
+                - db
+
+            db:
+              image: ${{ env.MYSQL_IMAGE }}
+              restart: always
+              environment:
+                - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+                - MYSQL_DATABASE=il8db
+              volumes:
+                - mysql_data:/var/lib/mysql
+
+          volumes:
+            mysql_data:
+          '
           
-          # Copy the entire repository content
-          rsync -avz --exclude='.git' --exclude='.github' -e "ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no" ./ "$SERVER_USER@$SERVER_IP:$WEBSITE_FOLDER"
-          echo "Deployment completed successfully!"
+          # Deploy using SSH
+          ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "
+            # Stop and remove existing containers
+            docker-compose down || true
+            
+            # Create new docker-compose.yml
+            echo '$COMPOSE_CONTENT' > docker-compose.yml
+            
+            # Pull latest images
+            docker-compose pull
+            
+            # Start containers
+            MYSQL_ROOT_PASSWORD='${{ secrets.MYSQL_ROOT_PASSWORD }}' docker-compose up -d
+            
+            # Cleanup old images
+            docker image prune -f
+          "
 
       - name: Verify Deployment
         env:
           SERVER_IP: ${{ secrets.SERVER_IP }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
-          WEBSITE_FOLDER: ${{ secrets.WEBSITE_FOLDER }}
         run: |
-          echo "Verifying deployment..."
-          
-          # List changed files in this commit
-          echo "Files changed in this commit:"
-          git diff --name-only HEAD^ HEAD || echo "Unable to get changed files"
-          
-          echo "Current files on server:"
-          ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "ls -la $WEBSITE_FOLDER"
+          echo "Verifying container status..."
+          ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "
+            docker ps --format '{{.Names}}\t{{.Status}}'
+          "
 
       - name: Cleanup SSH key
         run: rm -f ~/.ssh/deploy_key.pem
         
       - name: Deployment Status
-        run: echo "Deployment completed. Please check the Verify Deployment step output to confirm the updated files."
+        run: echo "Deployment completed. Please check the Verify Deployment step output to confirm the container status."
