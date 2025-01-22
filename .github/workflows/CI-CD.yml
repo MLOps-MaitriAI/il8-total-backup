@@ -62,11 +62,13 @@ jobs:
 
   deploy:
     needs: build-and-test
-    if: github.ref == 'refs/heads/main'  # Changed from 'production' to 'main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout code  # Added checkout step
+      - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 2  # Fetch the last 2 commits to enable diff
         
       - name: Create SSH key file
         run: |
@@ -81,19 +83,11 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
           WEBSITE_FOLDER: ${{ secrets.WEBSITE_FOLDER }}
         run: |
-          mkdir -p temp_staging
-          # Copy only the changed files to the temporary directory
-          git diff --name-only HEAD~1 HEAD | while read -r file; do
-            if [ -f "$file" ]; then
-              echo "Processing: $file"
-              mkdir -p "temp_staging/$(dirname "$file")"
-              cp "$file" "temp_staging/$file"
-            fi
-          done
+          # Create the website folder if it doesn't exist
+          ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "mkdir -p $WEBSITE_FOLDER"
           
-          # Using the created SSH key file for rsync
-          rsync -avz --exclude='.git' --exclude='.github' -e "ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no" temp_staging/ "$SERVER_USER@$SERVER_IP:$WEBSITE_FOLDER"
-          rm -rf temp_staging
+          # Copy the entire repository content
+          rsync -avz --exclude='.git' --exclude='.github' -e "ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no" ./ "$SERVER_USER@$SERVER_IP:$WEBSITE_FOLDER"
           echo "Deployment completed successfully!"
 
       - name: Verify Deployment
@@ -102,10 +96,13 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
           WEBSITE_FOLDER: ${{ secrets.WEBSITE_FOLDER }}
         run: |
-          echo "Recently changed files:"
-          git diff --name-only HEAD~1 HEAD
+          echo "Verifying deployment..."
           
-          # Using the created SSH key file for verification
+          # List changed files in this commit
+          echo "Files changed in this commit:"
+          git diff --name-only HEAD^ HEAD || echo "Unable to get changed files"
+          
+          echo "Current files on server:"
           ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "ls -la $WEBSITE_FOLDER"
 
       - name: Cleanup SSH key
