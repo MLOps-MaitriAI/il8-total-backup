@@ -1,3 +1,35 @@
+name: CI/CD Pipeline
+on:
+  push:
+    branches:
+      - main
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_BACKEND: ghcr.io/mlops-maitriai/il8-total-backup-backend
+  IMAGE_NAME_FRONTEND: ghcr.io/mlops-maitriai/il8-total-backup-frontend
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.IL8_CI_CD }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+        
+      - name: Build and Push Backend Image
+        working-directory: ./backend/app/
+        run: |
+          docker build -t ${{ env.IMAGE_NAME_BACKEND }}:latest .
+          docker push ${{ env.IMAGE_NAME_BACKEND }}:latest
+          
+      - name: Build and Push Frontend Image
+        working-directory: ./frontend
+        run: |
+          docker build -t ${{ env.IMAGE_NAME_FRONTEND }}:latest .
+          docker push ${{ env.IMAGE_NAME_FRONTEND }}:latest
+
   deploy:
     needs: build-and-test
     if: github.ref == 'refs/heads/main'
@@ -8,46 +40,45 @@
           mkdir -p ~/.ssh
           echo "${{ secrets.PEM_FILE }}" > ~/.ssh/deploy_key.pem
           chmod 600 ~/.ssh/deploy_key.pem
-          
-      - name: Deploy Containers
+
+      - name: Deploy Application on Server
         env:
           SERVER_IP: ${{ secrets.SERVER_IP }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
           ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "
-            # Stop and remove all running containers
-            sudo docker rm -f \$(sudo docker ps -aq) 2>/dev/null || true
+            set -e
 
-            # Remove all unused images, volumes, and networks
-            sudo docker system prune -af
-            sudo docker volume prune -f
-
-            # Delete any existing code files from the server
-            sudo rm -rf ~/backend ~/frontend ~/my.cnf ~/app ~/deploy_key.pem
-
-            # Login to GitHub Container Registry
+            echo 'Logging into GitHub Container Registry...'
             echo '${{ secrets.IL8_CI_CD }}' | sudo docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
 
-            # Create network if it doesn't exist
+            echo 'Creating Docker network if not exists...'
             sudo docker network create my-network 2>/dev/null || true
 
-            # Start MariaDB container with a named volume
+            echo 'Stopping and removing old containers...'
+            sudo docker rm -f backend frontend db nginx certbot || true
+            sudo docker system prune -f
+
+            echo 'Deploying MariaDB...'
             sudo docker run -d \
               --name db \
               --network my-network \
               -e MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }} \
               -e MYSQL_DATABASE=lms_db \
-              -e MYSQL_ROOT_HOST='%' \
               -p 3306:3306 \
               -v db_data:/var/lib/mysql \
+              --health-cmd='mysqladmin ping -h localhost -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }}' \
+              --health-interval=30s \
+              --health-timeout=10s \
+              --health-retries=5 \
               --restart unless-stopped \
               mariadb:10.5 \
               --default-authentication-plugin=mysql_native_password
 
-            # Wait for MariaDB to be healthy
+            echo 'Waiting for MariaDB to be ready...'
             timeout 300 bash -c 'while ! sudo docker exec db mysqladmin ping -h localhost -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }} --silent; do sleep 5; done'
 
-            # Start Backend container
+            echo 'Deploying Backend...'
             sudo docker run -d \
               --name backend \
               --network my-network \
@@ -60,26 +91,30 @@
               ${{ env.IMAGE_NAME_BACKEND }}:latest \
               sh -c 'python wait_for_db.py && uvicorn main:app --host 0.0.0.0 --port 8000'
 
-            # Start Frontend container
+            echo 'Deploying Frontend...'
             sudo docker run -d \
               --name frontend \
               --network my-network \
               ${{ env.IMAGE_NAME_FRONTEND }}:latest
 
-            # Start Nginx container
+            echo 'Deploying Nginx...'
             sudo docker run -d \
               --name nginx \
               --network my-network \
               -p 80:80 \
               -p 443:443 \
-              -v /etc/letsencrypt:/etc/letsencrypt:ro \
+              -v nginx_config:/etc/nginx/conf.d \
+              -v letsencrypt_data:/etc/letsencrypt \
               nginx:latest
 
-            # Start Certbot container
+            echo 'Deploying Certbot...'
             sudo docker run -d \
               --name certbot \
-              -v /etc/letsencrypt:/etc/letsencrypt \
+              -v letsencrypt_data:/etc/letsencrypt \
               certbot/certbot
+
+            echo 'Cleaning up unnecessary files...'
+            sudo rm -rf ~/backend ~/frontend ~/my.cnf
           "
 
       - name: Verify Deployment
@@ -87,10 +122,20 @@
           SERVER_IP: ${{ secrets.SERVER_IP }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
+          echo "Verifying container status..."
           ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "
-            echo 'Running Containers:'
-            sudo docker ps
+            echo 'Container Status:'
+            sudo docker ps -a
+
+            echo '\nMariaDB Logs:'
+            sudo docker logs db || true
+            echo '\nBackend Logs:'
+            sudo docker logs backend || true
+            echo '\nFrontend Logs:'
+            sudo docker logs frontend || true
+            echo '\nNginx Logs:'
+            sudo docker logs nginx || true
           "
 
-      - name: Cleanup SSH key
+      - name: Cleanup SSH Key
         run: rm -f ~/.ssh/deploy_key.pem
