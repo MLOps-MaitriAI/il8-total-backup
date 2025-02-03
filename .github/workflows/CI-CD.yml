@@ -53,7 +53,10 @@ jobs:
             echo '${{ secrets.IL8_CI_CD }}' | sudo docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
 
             echo 'Creating Docker network if not exists...'
-            sudo docker network create my-network 2>/dev/null || true
+            # Recreate Docker network
+            sudo docker network rm my-network 2>/dev/null || true
+            sudo docker network create my-network
+ 
 
             echo 'Stopping and removing old containers...'
             sudo docker rm -f backend frontend db nginx certbot || true
