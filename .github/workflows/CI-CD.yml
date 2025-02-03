@@ -16,16 +16,13 @@
         run: |
           ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "
             # Stop and remove all running containers
-            echo 'Stopping and removing all running containers...'
             sudo docker rm -f \$(sudo docker ps -aq) 2>/dev/null || true
-            
+
             # Remove all unused images, volumes, and networks
-            echo 'Cleaning up Docker system...'
             sudo docker system prune -af
             sudo docker volume prune -f
 
             # Delete any existing code files from the server
-            echo 'Removing non-container files and directories...'
             sudo rm -rf ~/backend ~/frontend ~/my.cnf ~/app ~/deploy_key.pem
 
             # Login to GitHub Container Registry
@@ -48,7 +45,6 @@
               --default-authentication-plugin=mysql_native_password
 
             # Wait for MariaDB to be healthy
-            echo 'Waiting for MariaDB to be healthy...'
             timeout 300 bash -c 'while ! sudo docker exec db mysqladmin ping -h localhost -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }} --silent; do sleep 5; done'
 
             # Start Backend container
@@ -91,7 +87,6 @@
           SERVER_IP: ${{ secrets.SERVER_IP }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
-          echo "Verifying container status..."
           ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "
             echo 'Running Containers:'
             sudo docker ps
