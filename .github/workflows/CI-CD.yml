@@ -29,7 +29,6 @@ jobs:
         run: |
           docker build -t ${{ env.IMAGE_NAME_FRONTEND }}:latest .
           docker push ${{ env.IMAGE_NAME_FRONTEND }}:latest
-
   deploy:
     needs: build-and-test
     if: github.ref == 'refs/heads/main'
@@ -40,36 +39,28 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.PEM_FILE }}" > ~/.ssh/deploy_key.pem
           chmod 600 ~/.ssh/deploy_key.pem
-
-      - name: Deploy Application on Server
+      - name: Setup Docker Network and Containers
         env:
           SERVER_IP: ${{ secrets.SERVER_IP }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
           ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "
-            set -e
-
-            echo 'Logging into GitHub Container Registry...'
+            # Login to GitHub Container Registry
             echo '${{ secrets.IL8_CI_CD }}' | sudo docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
-
-            echo 'Creating Docker network if not exists...'
-            # Recreate Docker network
-            sudo docker network rm my-network 2>/dev/null || true
-            sudo docker network create my-network
- 
-
-            echo 'Stopping and removing old containers...'
-            sudo docker rm -f backend frontend db nginx certbot || true
-            sudo docker system prune -f
-
-            echo 'Deploying MariaDB...'
+            # Create network if it doesn't exist
+            sudo docker network create my-network 2>/dev/null || true
+            # Stop and remove existing containers
+            sudo docker rm -f frontend backend db nginx certbot 2>/dev/null || true
+            # Start MariaDB container
             sudo docker run -d \
               --name db \
               --network my-network \
               -e MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }} \
               -e MYSQL_DATABASE=lms_db \
+              -e MYSQL_ROOT_HOST='%' \
               -p 3306:3306 \
               -v db_data:/var/lib/mysql \
+              -v ./my.cnf:/etc/mysql/my.cnf \
               --health-cmd='mysqladmin ping -h localhost -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }}' \
               --health-interval=30s \
               --health-timeout=10s \
@@ -77,11 +68,10 @@ jobs:
               --restart unless-stopped \
               mariadb:10.5 \
               --default-authentication-plugin=mysql_native_password
-
-            echo 'Waiting for MariaDB to be ready...'
+            # Wait for MariaDB to be healthy
+            echo 'Waiting for MariaDB to be healthy...'
             timeout 300 bash -c 'while ! sudo docker exec db mysqladmin ping -h localhost -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }} --silent; do sleep 5; done'
-
-            echo 'Deploying Backend...'
+            # Start Backend container
             sudo docker run -d \
               --name backend \
               --network my-network \
@@ -90,36 +80,29 @@ jobs:
               -e GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} \
               -e GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }} \
               -e ALGORITHM=HS256 \
-              -v backend_uploads:/app/static/uploads \
+              -v ./backend/app/static/uploads:/app/static/uploads \
               ${{ env.IMAGE_NAME_BACKEND }}:latest \
               sh -c 'python wait_for_db.py && uvicorn main:app --host 0.0.0.0 --port 8000'
-
-            echo 'Deploying Frontend...'
+            # Start Frontend container
             sudo docker run -d \
               --name frontend \
               --network my-network \
               ${{ env.IMAGE_NAME_FRONTEND }}:latest
-
-            echo 'Deploying Nginx...'
+            # Start Nginx container
             sudo docker run -d \
               --name nginx \
               --network my-network \
               -p 80:80 \
               -p 443:443 \
-              -v nginx_config:/etc/nginx/conf.d \
-              -v letsencrypt_data:/etc/letsencrypt \
+              -v ./backend/nginx/nginx.conf:/etc/nginx/nginx.conf:ro \
+              -v /etc/letsencrypt:/etc/letsencrypt:ro \
               nginx:latest
-
-            echo 'Deploying Certbot...'
+            # Start Certbot container
             sudo docker run -d \
               --name certbot \
-              -v letsencrypt_data:/etc/letsencrypt \
+              -v /etc/letsencrypt:/etc/letsencrypt \
               certbot/certbot
-
-            echo 'Cleaning up unnecessary files...'
-            sudo rm -rf ~/backend ~/frontend ~/my.cnf
           "
-
       - name: Verify Deployment
         env:
           SERVER_IP: ${{ secrets.SERVER_IP }}
@@ -129,16 +112,16 @@ jobs:
           ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "
             echo 'Container Status:'
             sudo docker ps -a
-
+            
+            echo '\nContainer Logs:'
             echo '\nMariaDB Logs:'
-            sudo docker logs db || true
+            sudo docker logs db
             echo '\nBackend Logs:'
-            sudo docker logs backend || true
+            sudo docker logs backend
             echo '\nFrontend Logs:'
-            sudo docker logs frontend || true
+            sudo docker logs frontend
             echo '\nNginx Logs:'
-            sudo docker logs nginx || true
+            sudo docker logs nginx
           "
-
-      - name: Cleanup SSH Key
+      - name: Cleanup SSH key
         run: rm -f ~/.ssh/deploy_key.pem
